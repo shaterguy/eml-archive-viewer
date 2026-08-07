@@ -1,0 +1,216 @@
+<Window x:Class="EmlArchiveViewer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:EmlArchiveViewer"
+        Title="EML Archive Viewer" Width="1500" Height="900" MinWidth="1050" MinHeight="650"
+        Icon="Assets/EMLArchiveViewer.ico"
+        WindowStartupLocation="CenterScreen" Closing="Window_Closing"
+        Loaded="Window_Loaded_Compatibility">
+  <Window.Resources>
+    <local:LegacyKoreanTextConverter x:Key="LegacyKoreanTextConverter" />
+  </Window.Resources>
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Background="#F3F3F3" BorderBrush="#D0D0D0" BorderThickness="0,0,0,1" Padding="6">
+      <StackPanel>
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="220" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <Button Grid.Column="0" Content="폴더 등록" Click="AddFolder_Click" />
+          <Button Grid.Column="1" Content="폴더 해제" Click="RemoveFolder_Click" />
+          <Button Grid.Column="2" Content="다시 색인" Click="Reindex_Click" />
+          <ComboBox Grid.Column="3" x:Name="SearchScopeCombo" SelectionChanged="SearchControl_Changed">
+            <ComboBoxItem Content="전체 등록 폴더" Tag="All" IsSelected="True" />
+            <ComboBoxItem Content="현재 폴더 및 하위 폴더" Tag="Current" />
+          </ComboBox>
+          <TextBox Grid.Column="4" x:Name="QuickSearchBox" VerticalContentAlignment="Center"
+                   ToolTip="제목, 본문, 보낸 사람, 받는 사람, 참조, 첨부파일명, 폴더 검색"
+                   KeyDown="QuickSearchBox_KeyDown" TextChanged="QuickSearchBox_TextChanged" />
+          <Button Grid.Column="5" Content="검색" Click="Search_Click" />
+          <Button Grid.Column="6" Content="검색 초기화" Click="ClearSearch_Click"
+                  ToolTip="검색어와 상세 조건을 지우고 현재 폴더의 전체 메일을 표시합니다." />
+          <ToggleButton Grid.Column="7" x:Name="AdvancedToggle" Content="상세 검색" Margin="3" Padding="10,5" />
+        </Grid>
+        <Expander IsExpanded="{Binding IsChecked, ElementName=AdvancedToggle}" Header="" Padding="3">
+          <Grid Margin="0,4,0,2">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" /><ColumnDefinition Width="180" />
+              <ColumnDefinition Width="Auto" /><ColumnDefinition Width="180" />
+              <ColumnDefinition Width="Auto" /><ColumnDefinition Width="180" />
+              <ColumnDefinition Width="Auto" /><ColumnDefinition Width="180" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="제목" VerticalAlignment="Center" />
+            <TextBox Grid.Row="0" Grid.Column="1" x:Name="SubjectSearchBox" />
+            <TextBlock Grid.Row="0" Grid.Column="2" Text="본문" VerticalAlignment="Center" />
+            <TextBox Grid.Row="0" Grid.Column="3" x:Name="BodySearchBox" />
+            <TextBlock Grid.Row="0" Grid.Column="4" Text="보낸 사람" VerticalAlignment="Center" />
+            <TextBox Grid.Row="0" Grid.Column="5" x:Name="SenderSearchBox" />
+            <TextBlock Grid.Row="0" Grid.Column="6" Text="받는 사람" VerticalAlignment="Center" />
+            <TextBox Grid.Row="0" Grid.Column="7" x:Name="RecipientSearchBox" />
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="참조" VerticalAlignment="Center" />
+            <TextBox Grid.Row="1" Grid.Column="1" x:Name="CcSearchBox" />
+            <TextBlock Grid.Row="1" Grid.Column="2" Text="첨부파일명" VerticalAlignment="Center" />
+            <TextBox Grid.Row="1" Grid.Column="3" x:Name="AttachmentSearchBox" />
+            <TextBlock Grid.Row="1" Grid.Column="4" Text="시작일" VerticalAlignment="Center" />
+            <DatePicker Grid.Row="1" Grid.Column="5" x:Name="DateFromPicker" Margin="3" />
+            <TextBlock Grid.Row="1" Grid.Column="6" Text="종료일" VerticalAlignment="Center" />
+            <DatePicker Grid.Row="1" Grid.Column="7" x:Name="DateToPicker" Margin="3" />
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="첨부 여부" VerticalAlignment="Center" />
+            <ComboBox Grid.Row="2" Grid.Column="1" x:Name="AttachmentFilterCombo">
+              <ComboBoxItem Content="전체" Tag="All" IsSelected="True" />
+              <ComboBoxItem Content="첨부 있음" Tag="Yes" />
+              <ComboBoxItem Content="첨부 없음" Tag="No" />
+            </ComboBox>
+            <Button Grid.Row="2" Grid.Column="6" Content="조건 초기화" Click="ClearSearch_Click" />
+            <Button Grid.Row="2" Grid.Column="7" Content="상세 검색 실행" Click="Search_Click" />
+          </Grid>
+        </Expander>
+      </StackPanel>
+    </Border>
+
+    <StatusBar DockPanel.Dock="Bottom">
+      <StatusBarItem><TextBlock x:Name="StatusText" Text="준비" /></StatusBarItem>
+      <Separator />
+      <StatusBarItem><TextBlock x:Name="ResultCountText" Text="0개" /></StatusBarItem>
+      <Separator />
+      <StatusBarItem><TextBlock Text="실시간 감시 + 30초 보정" /></StatusBarItem>
+    </StatusBar>
+
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="240" MinWidth="160" />
+        <ColumnDefinition Width="5" />
+        <ColumnDefinition Width="560" MinWidth="320" />
+        <ColumnDefinition Width="5" />
+        <ColumnDefinition Width="*" MinWidth="400" />
+      </Grid.ColumnDefinitions>
+
+      <DockPanel Grid.Column="0" Background="#FAFAFA">
+        <TextBlock DockPanel.Dock="Top" Text="폴더" FontWeight="SemiBold" Padding="10,8" />
+        <TreeView x:Name="FolderTree" Margin="5" SelectedItemChanged="FolderTree_SelectedItemChanged">
+          <TreeView.ItemContainerStyle>
+            <Style TargetType="TreeViewItem">
+              <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+              <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+            </Style>
+          </TreeView.ItemContainerStyle>
+          <TreeView.ItemTemplate>
+            <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+              <TextBlock Text="{Binding Name}" />
+            </HierarchicalDataTemplate>
+          </TreeView.ItemTemplate>
+        </TreeView>
+      </DockPanel>
+      <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" />
+
+      <DataGrid Grid.Column="2" x:Name="MailGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                SelectionMode="Single" SelectionUnit="FullRow"
+                SelectionChanged="MailGrid_SelectionChanged"
+                PreviewMouseLeftButtonDown="MailGrid_PreviewMouseLeftButtonDown_NoAutoScroll"
+                RequestBringIntoView="MailGrid_RequestBringIntoView_NoAutoScroll"
+                ColumnReordered="MailGrid_ColumnReordered"
+                EnableRowVirtualization="True" EnableColumnVirtualization="True"
+                RowHeight="32" ColumnHeaderHeight="32"
+                HeadersVisibility="Column" GridLinesVisibility="Horizontal" AlternatingRowBackground="#FAFAFA">
+        <DataGrid.Resources>
+          <Style TargetType="DataGridCell">
+            <Setter Property="Padding" Value="7,3" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+          </Style>
+          <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Padding" Value="7,4" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+          </Style>
+        </DataGrid.Resources>
+        <DataGrid.Columns>
+          <DataGridTextColumn Header="날짜" Binding="{Binding SentDateDisplay}" Width="125" SortMemberPath="SentDate" />
+          <DataGridTextColumn Header="보낸 사람" Binding="{Binding Sender, Converter={StaticResource LegacyKoreanTextConverter}}" Width="180" SortMemberPath="Sender" />
+          <DataGridTextColumn Header="제목" Binding="{Binding Subject, Converter={StaticResource LegacyKoreanTextConverter}}" Width="2*" SortMemberPath="Subject" />
+          <DataGridTextColumn Header="받는 사람" Binding="{Binding Recipients, Converter={StaticResource LegacyKoreanTextConverter}}" Width="170" SortMemberPath="Recipients" />
+          <DataGridTextColumn Header="첨부" Binding="{Binding AttachmentDisplay}" Width="65" SortMemberPath="AttachmentCount" />
+          <DataGridTextColumn Header="폴더" Binding="{Binding RelativeFolderPath}" Width="150" SortMemberPath="RelativeFolderPath" />
+        </DataGrid.Columns>
+      </DataGrid>
+      <GridSplitter Grid.Column="3" Width="5" HorizontalAlignment="Stretch" />
+
+      <DockPanel Grid.Column="4" Margin="10">
+        <StackPanel DockPanel.Dock="Top">
+          <TextBlock x:Name="PreviewSubject" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,8" />
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="75" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <TextBlock Grid.Row="0" Text="보낸 사람" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <TextBlock Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" x:Name="PreviewSender"
+                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+
+            <TextBlock Grid.Row="1" Text="받는 사람" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <TextBlock Grid.Row="1" Grid.Column="1" x:Name="PreviewRecipients"
+                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+            <Button Grid.Row="1" Grid.Column="2" Content="전체 보기" Click="ShowRecipients_Click"
+                    Padding="6,1" Margin="6,1,0,1" MinWidth="60" />
+
+            <TextBlock Grid.Row="2" Text="참조" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <TextBlock Grid.Row="2" Grid.Column="1" x:Name="PreviewCc"
+                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+            <Button Grid.Row="2" Grid.Column="2" Content="전체 보기" Click="ShowCc_Click"
+                    Padding="6,1" Margin="6,1,0,1" MinWidth="60" />
+
+            <TextBlock Grid.Row="3" Text="날짜" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" x:Name="PreviewDate" VerticalAlignment="Center" />
+            <TextBlock Grid.Row="4" Text="원본" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <TextBlock Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" x:Name="PreviewPath"
+                       TextTrimming="CharacterEllipsis" Foreground="#666" VerticalAlignment="Center" />
+          </Grid>
+          <Border BorderBrush="#D0D0D0" BorderThickness="0,1,0,1" Margin="0,10,0,6" Padding="4">
+            <DockPanel>
+              <TextBlock DockPanel.Dock="Left" Text="첨부파일" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" />
+              <ListBox x:Name="AttachmentList" MinHeight="30" MaxHeight="90" SelectedIndex="0"
+                       MouseDoubleClick="AttachmentList_MouseDoubleClick">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <StackPanel Orientation="Horizontal">
+                      <TextBlock Text="📎 " /><TextBlock Text="{Binding FileName}" FontWeight="SemiBold" />
+                      <TextBlock Text="  " /><TextBlock Text="{Binding SizeDisplay}" Foreground="#666" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button Content="선택 파일 열기" Click="OpenSelectedAttachment_Click" />
+                <Button Content="선택 파일 저장" Click="SaveSelectedAttachment_Click" />
+                <Button Content="전체 첨부파일 저장" Click="SaveAllAttachments_Click" />
+              </StackPanel>
+            </DockPanel>
+          </Border>
+        </StackPanel>
+        <TabControl>
+          <TabItem Header="HTML 보기"><WebBrowser x:Name="HtmlBrowser" /></TabItem>
+          <TabItem Header="텍스트 보기"><TextBox x:Name="TextPreview" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" BorderThickness="0" Padding="10" /></TabItem>
+          <TabItem Header="오류"><TextBox x:Name="ErrorPreview" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0" Padding="10" /></TabItem>
+        </TabControl>
+      </DockPanel>
+    </Grid>
+  </DockPanel>
+</Window>

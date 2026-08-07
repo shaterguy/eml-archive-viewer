@@ -1,0 +1,12 @@
+.vs/
+.idea/
+*.user
+*.suo
+bin/
+obj/
+artifacts/
+TestResults/
+*.db
+*.db-shm
+*.db-wal
+src/EmlArchiveViewer/Assets/EMLArchiveViewer.ico

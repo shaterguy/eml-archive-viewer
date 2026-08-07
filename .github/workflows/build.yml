@@ -1,0 +1,118 @@
+name: build
+
+on:
+  push:
+    branches: [ main, "agent/**" ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Read application version
+        id: version
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content src/EmlArchiveViewer/EmlArchiveViewer.csproj -Raw
+          $version = [string]$project.Project.PropertyGroup.Version
+          if ([string]::IsNullOrWhiteSpace($version)) { throw "Application version was not found." }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+
+      - name: Restore
+        run: dotnet restore EmlArchiveViewer.sln
+
+      - name: Build and capture diagnostics
+        shell: pwsh
+        run: |
+          dotnet build EmlArchiveViewer.sln -c Release --no-restore *> build.log
+          Set-Content build.exit $LASTEXITCODE
+          Get-Content build.log | Select-String -Pattern "error |warning "
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-diagnostics
+          path: |
+            build.log
+            build.exit
+          if-no-files-found: error
+
+      - name: Stop on build failure
+        shell: pwsh
+        run: |
+          $code = [int](Get-Content build.exit)
+          if ($code -ne 0) { throw "Build failed with exit code $code" }
+
+      - name: Run database indexing smoke test
+        run: dotnet run --project tests/EmlArchiveViewer.SmokeTests/EmlArchiveViewer.SmokeTests.csproj -c Release --no-build
+
+      - name: Publish single EXE
+        shell: pwsh
+        run: |
+          dotnet publish src/EmlArchiveViewer/EmlArchiveViewer.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o artifacts *> publish.log
+          $code = $LASTEXITCODE
+          Get-Content publish.log | Select-String -Pattern "error |warning "
+          if ($code -ne 0) { exit $code }
+
+      - name: Verify executable, icon, and version
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem artifacts -File
+          $files | Format-Table Name, Length
+          $exe = @(Get-ChildItem artifacts -Filter EMLArchiveViewer.exe)
+          if ($exe.Count -ne 1) { throw "EMLArchiveViewer.exe was not produced." }
+          if ($exe[0].Length -lt 1MB) { throw "Published executable is unexpectedly small." }
+
+          $expectedVersion = "${{ steps.version.outputs.version }}.0"
+          $actualVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($exe[0].FullName).FileVersion
+          if ($actualVersion -ne $expectedVersion) {
+            throw "Executable version mismatch. Expected $expectedVersion, got $actualVersion."
+          }
+
+          $icon = "src/EmlArchiveViewer/Assets/EMLArchiveViewer.ico"
+          if (-not (Test-Path $icon)) { throw "Application icon was not generated." }
+          if ((Get-Item $icon).Length -lt 1KB) { throw "Generated application icon is unexpectedly small." }
+
+      - name: Generate SHA-256 checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash artifacts/EMLArchiveViewer.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash *EMLArchiveViewer.exe" | Set-Content artifacts/EMLArchiveViewer.exe.sha256 -Encoding utf8NoBOM
+          Get-Content artifacts/EMLArchiveViewer.exe.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EMLArchiveViewer-v${{ steps.version.outputs.version }}-win-x64
+          path: |
+            artifacts/EMLArchiveViewer.exe
+            artifacts/EMLArchiveViewer.exe.sha256
+          if-no-files-found: error
+
+      - name: Create or update GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.version.outputs.tag }}"
+          $title = "EML Archive Viewer $tag"
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag artifacts/EMLArchiveViewer.exe artifacts/EMLArchiveViewer.exe.sha256 --clobber --repo $env:GITHUB_REPOSITORY
+          }
+          else {
+            gh release create $tag artifacts/EMLArchiveViewer.exe artifacts/EMLArchiveViewer.exe.sha256 --target $env:GITHUB_SHA --title $title --generate-notes --repo $env:GITHUB_REPOSITORY
+          }
