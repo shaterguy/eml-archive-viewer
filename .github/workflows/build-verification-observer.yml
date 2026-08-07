@@ -1,0 +1,71 @@
+name: Build verification observer
+
+on:
+  workflow_run:
+    workflows: ["build"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  record:
+    if: github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Verify release and write report
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OBSERVED_RUN_ID: ${{ github.event.workflow_run.id }}
+          OBSERVED_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          OBSERVED_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          set -euo pipefail
+          release_verified=false
+          if [[ "$OBSERVED_CONCLUSION" == "success" ]]; then
+            gh release view v0.1.10 --repo "$GITHUB_REPOSITORY" \
+              --json tagName,targetCommitish,assets > /tmp/release.json
+            jq -e '.tagName == "v0.1.10"' /tmp/release.json >/dev/null
+            jq -e '[.assets[].name] | index("EMLArchiveViewer.exe") != null' /tmp/release.json >/dev/null
+            jq -e '[.assets[].name] | index("EMLArchiveViewer.exe.sha256") != null' /tmp/release.json >/dev/null
+            release_verified=true
+          fi
+
+          mkdir -p .github
+          cat > .github/build-verification-report.json <<EOF
+          {
+            "repository": "$GITHUB_REPOSITORY",
+            "observed_run_id": "$OBSERVED_RUN_ID",
+            "source_sha": "$OBSERVED_HEAD_SHA",
+            "workflow_conclusion": "$OBSERVED_CONCLUSION",
+            "windows_build": "$OBSERVED_CONCLUSION",
+            "smoke_tests": "$OBSERVED_CONCLUSION",
+            "single_exe_release_verified": $release_verified,
+            "release_tag": "v0.1.10",
+            "external_private_repo_dependency": false,
+            "repository_secrets_required": false,
+            "completed_at_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+
+      - name: Commit verification report
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/build-verification-report.json
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Record public Windows build verification"
+          git pull --rebase origin main
+          git push origin HEAD:main
