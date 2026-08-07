@@ -1,11 +1,11 @@
 {
-  "repository": "shaterguy/public-eml-archive-viewer",
-  "run_id": "31145366388",
-  "event": "push",
-  "delete_all": true,
-  "deleted_artifacts": 2,
-  "remaining_artifacts": 0,
+  "repository": "shaterguy/eml-archive-viewer",
+  "run_id": "31211403061",
+  "event": "schedule",
+  "delete_all": false,
+  "deleted_artifacts": 0,
+  "remaining_artifacts": 4,
   "retention_days": 7,
   "retention_setting": "fallback-scheduled-cleanup",
-  "completed_at_utc": "2026-08-07T03:48:26Z"
+  "completed_at_utc": "2026-08-07T19:25:40Z"
 }
