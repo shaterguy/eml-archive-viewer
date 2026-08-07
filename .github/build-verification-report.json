@@ -1,0 +1,13 @@
+{
+  "repository": "shaterguy/public-eml-archive-viewer",
+  "observed_run_id": "31145550182",
+  "source_sha": "10a56c8ffe091f57962982592f2e2d7d69daf376",
+  "workflow_conclusion": "success",
+  "windows_build": "success",
+  "smoke_tests": "success",
+  "single_exe_release_verified": true,
+  "release_tag": "v0.1.10",
+  "external_private_repo_dependency": false,
+  "repository_secrets_required": false,
+  "completed_at_utc": "2026-08-07T03:52:08Z"
+}
