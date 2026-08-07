@@ -3,6 +3,9 @@ name: build
 on:
   push:
     branches: [ main, "agent/**" ]
+    paths-ignore:
+      - ".github/artifact-maintenance-report.json"
+      - ".github/build-verification-report.json"
   pull_request:
     branches: [ main ]
   workflow_dispatch:
