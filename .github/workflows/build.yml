@@ -2,7 +2,7 @@ name: build
 
 on:
   push:
-    branches: [ main, "agent/**" ]
+    branches: [main, "agent/**", 'ci-fallback/**']
     paths-ignore:
       - ".github/artifact-maintenance-report.json"
       - ".github/build-verification-report.json"
@@ -16,6 +16,8 @@ permissions:
 
 jobs:
   build:
+    if: >-
+      (github.event_name != 'push' || contains(github.event.head_commit.message, '[gh-fallback:build.yml]'))
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
